@@ -1,10 +1,9 @@
-# api.py
 from flask import Flask, jsonify, request
-from flask_cors import CORS  # Importer CORS
+from flask_cors import CORS
 import csv
 
 app = Flask(__name__)
-CORS(app)  # Activer CORS pour toutes les routes
+CORS(app)  # Cette ligne active CORS pour toutes les routes, vous pouvez spécifier des origines si besoin
 
 # Chargement des données depuis le fichier CSV
 def load_data(csv_file):
@@ -16,7 +15,7 @@ def load_data(csv_file):
     return data
 
 # Charger les données du fichier CSV au démarrage du serveur
-data = load_data('hardware_data.csv')  # Assurez-vous du chemin relatif correct vers le CSV
+data = load_data('hardware_data.csv')  # Assurez-vous que le chemin est correct selon votre environnement de déploiement
 
 # Route pour obtenir les informations d'un PC via son SN
 @app.route('/api/hardware/<sn>', methods=['GET'])
