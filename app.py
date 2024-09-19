@@ -15,7 +15,7 @@ def load_data(csv_file):
     return data
 
 # Charger les données du fichier CSV au démarrage du serveur
-data = load_data('../hardware_data.csv')  # Assurez-vous du chemin relatif correct vers le CSV
+data = load_data('hardware_data.csv')  # Assurez-vous du chemin relatif correct vers le CSV
 
 # Route pour obtenir les informations d'un PC via son SN
 @app.route('/api/hardware/<sn>', methods=['GET'])
