@@ -27,6 +27,26 @@ def get_hardware(sn):
     else:
         return jsonify({'error': 'PC non trouvé'}), 404
 
+
+# Nouvelle route pour la recherche par texte
+@app.route('/api/search', methods=['GET'])
+def search_hardware():
+    query = request.args.get('query', '').lower()  # Récupère la requête de recherche et la met en minuscules
+    if not query:
+        return jsonify({'error': 'Veuillez fournir une requête de recherche.'}), 400
+
+    # Recherche dans tous les champs du fichier CSV
+    results = [
+        item for item in data
+        if any(query in str(value).lower() for value in item.values())
+    ]
+
+    if results:
+        return jsonify(results)
+    else:
+        return jsonify({'error': 'Aucun résultat trouvé pour la requête donnée.'}), 404
+
+
 # Point d'entrée de l'application Flask
 if __name__ == '__main__':
     app.run(debug=True)
