@@ -2,6 +2,7 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from supabase import create_client, Client
 import os
+import pandas as pd
 from dotenv import load_dotenv
 
 app = Flask(__name__)
@@ -49,6 +50,36 @@ def search_hardware():
     except Exception as e:
         print(f"Error searching hardware: {e}")  # Log the error for debugging
         return jsonify({'error': 'Erreur lors de la recherche des données.'}), 500
+
+
+# Route pour enregistrer une modification
+@app.route('/api/hardware/<int:hardware_id>/modify', methods=['POST'])
+def record_modification(hardware_id):
+    # Récupérer les données JSON de la requête
+    data = request.json
+
+    # Vérifier que les données nécessaires sont présentes
+    if not all(key in data for key in ('ancien_proprietaire', 'commentaire', 'modifie_par')):
+        return jsonify(
+            {'error': 'Champs manquants. Veuillez fournir ancien_proprietaire, commentaire, et modifie_par.'}), 400
+
+    # Préparer les données pour l'insertion
+    historique_data = {
+        'hardware_id': hardware_id,
+        'date_modification': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
+        'ancien_proprietaire': data['ancien_proprietaire'],
+        'commentaire': data['commentaire'],
+        'modifie_par': data['modifie_par']
+    }
+
+    # Insérer dans la table historique_modifications
+    response = supabase.table('historique_modifications').insert(historique_data).execute()
+
+    # Vérifier si l'insertion a réussi
+    if response.status_code == 201:
+        return jsonify({'message': 'Modification enregistrée avec succès!', 'data': response.data}), 201
+    else:
+        return jsonify({'error': 'Erreur lors de l\'enregistrement de la modification.', 'details': response.data}), 500
 
 
 # Point d'entrée de l'application Flask
