@@ -1,28 +1,28 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import firebase_admin
-from firebase_admin import credentials, firestore
+from supabase import create_client, Client
+import os
+from dotenv import load_dotenv
 
 app = Flask(__name__)
 CORS(app)
 
-# Initialiser Firebase Admin SDK avec les informations d'identification
-cred = credentials.Certificate('serviceAccountKey.json')
-firebase_admin.initialize_app(cred)
+# Charger les variables d'environnement depuis le fichier .env.development.local
+load_dotenv('.env.development.local')
 
-# Connexion à la base de données Firestore
-db = firestore.client()
+# Initialiser Supabase avec les variables d'environnement
+url = os.getenv('SUPABASE_URL')
+key = os.getenv('SUPABASE_ANON_KEY')
+supabase: Client = create_client(url, key)
 
 
 # Route pour obtenir les informations d'un PC via son SN
 @app.route('/api/hardware/<sn>', methods=['GET'])
 def get_hardware(sn):
-    # Requête Firestore pour obtenir le document correspondant au SN
-    doc_ref = db.collection('hardware').document(sn)
-    doc = doc_ref.get()
+    response = supabase.table('hardware').select('*').eq('SN', sn).execute()
 
-    if doc.exists:
-        return jsonify(doc.to_dict())
+    if response['data']:
+        return jsonify(response['data'][0])
     else:
         return jsonify({'error': 'PC non trouvé'}), 404
 
@@ -30,19 +30,12 @@ def get_hardware(sn):
 # Nouvelle route pour la recherche par texte
 @app.route('/api/search', methods=['GET'])
 def search_hardware():
-    query = request.args.get('query', '').lower()  # Récupère la requête de recherche et la met en minuscules
+    query = request.args.get('query', '').lower()
     if not query:
         return jsonify({'error': 'Veuillez fournir une requête de recherche.'}), 400
 
-    # Requête Firestore pour rechercher dans tous les documents
-    results = []
-    docs = db.collection('hardware').stream()
-
-    for doc in docs:
-        data = doc.to_dict()
-        # Recherche dans tous les champs du document
-        if any(query in str(value).lower() for value in data.values()):
-            results.append(data)
+    response = supabase.table('hardware').select('*').execute()
+    results = [item for item in response['data'] if any(query in str(value).lower() for value in item.values())]
 
     if results:
         return jsonify(results)
