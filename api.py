@@ -1,29 +1,28 @@
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-import csv
+import firebase_admin
+from firebase_admin import credentials, firestore
 
 app = Flask(__name__)
-CORS(app)  # Cette ligne active CORS pour toutes les routes, vous pouvez spécifier des origines si besoin
+CORS(app)
 
-# Chargement des données depuis le fichier CSV
-def load_data(csv_file):
-    data = []
-    with open(csv_file, mode='r', newline='') as file:
-        reader = csv.DictReader(file)
-        for row in reader:
-            data.append(row)
-    return data
+# Initialiser Firebase Admin SDK avec les informations d'identification
+cred = credentials.Certificate('serviceAccountKey.json')
+firebase_admin.initialize_app(cred)
 
-# Charger les données du fichier CSV au démarrage du serveur
-data = load_data('hardware_data.csv')  # Assurez-vous que le chemin est correct selon votre environnement de déploiement
+# Connexion à la base de données Firestore
+db = firestore.client()
+
 
 # Route pour obtenir les informations d'un PC via son SN
 @app.route('/api/hardware/<sn>', methods=['GET'])
 def get_hardware(sn):
-    # Recherche des données par SN
-    result = next((item for item in data if item['SN'] == sn), None)
-    if result:
-        return jsonify(result)
+    # Requête Firestore pour obtenir le document correspondant au SN
+    doc_ref = db.collection('hardware').document(sn)
+    doc = doc_ref.get()
+
+    if doc.exists:
+        return jsonify(doc.to_dict())
     else:
         return jsonify({'error': 'PC non trouvé'}), 404
 
@@ -35,11 +34,15 @@ def search_hardware():
     if not query:
         return jsonify({'error': 'Veuillez fournir une requête de recherche.'}), 400
 
-    # Recherche dans tous les champs du fichier CSV
-    results = [
-        item for item in data
-        if any(query in str(value).lower() for value in item.values())
-    ]
+    # Requête Firestore pour rechercher dans tous les documents
+    results = []
+    docs = db.collection('hardware').stream()
+
+    for doc in docs:
+        data = doc.to_dict()
+        # Recherche dans tous les champs du document
+        if any(query in str(value).lower() for value in data.values()):
+            results.append(data)
 
     if results:
         return jsonify(results)
