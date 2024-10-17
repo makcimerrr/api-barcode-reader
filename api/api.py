@@ -2,7 +2,6 @@ from flask import Flask, jsonify, request
 from flask_cors import CORS
 from supabase import create_client, Client
 import os
-import pandas as pd
 from dotenv import load_dotenv
 
 app = Flask(__name__)
@@ -52,34 +51,39 @@ def search_hardware():
         return jsonify({'error': 'Erreur lors de la recherche des données.'}), 500
 
 
-# Route pour enregistrer une modification
-@app.route('/api/hardware/<int:hardware_id>/modify', methods=['POST'])
-def record_modification(hardware_id):
-    # Récupérer les données JSON de la requête
-    data = request.json
+@app.route('/api/historique_modifications/<int:id>', methods=['PUT'])
+def update_historique_modifications(id):
+    try:
+        data = request.json
+        new_owner = data['new_owner']
+        commentaire = data.get('commentaire', '')
+        modifie_par = data.get('modifie_par', 'inconnu')
 
-    # Vérifier que les données nécessaires sont présentes
-    if not all(key in data for key in ('ancien_proprietaire', 'commentaire', 'modifie_par')):
-        return jsonify(
-            {'error': 'Champs manquants. Veuillez fournir ancien_proprietaire, commentaire, et modifie_par.'}), 400
+        # Récupérer l'enregistrement actuel dans la table hardware
+        hardware_response = supabase.table('hardware').select('owner').eq('id', id).execute()
+        if not hardware_response.data:
+            return jsonify({'error': 'Enregistrement hardware non trouvé'}), 404
 
-    # Préparer les données pour l'insertion
-    historique_data = {
-        'hardware_id': hardware_id,
-        'date_modification': pd.Timestamp.now().strftime('%Y-%m-%d %H:%M:%S'),
-        'ancien_proprietaire': data['ancien_proprietaire'],
-        'commentaire': data['commentaire'],
-        'modifie_par': data['modifie_par']
-    }
+        current_owner = hardware_response.data[0]['owner']
 
-    # Insérer dans la table historique_modifications
-    response = supabase.table('historique_modifications').insert(historique_data).execute()
+        # Mettre à jour le propriétaire dans la table hardware
+        supabase.table('hardware').update({'owner': new_owner}).eq('id', id).execute()
 
-    # Vérifier si l'insertion a réussi
-    if response.status_code == 201:
-        return jsonify({'message': 'Modification enregistrée avec succès!', 'data': response.data}), 201
-    else:
-        return jsonify({'error': 'Erreur lors de l\'enregistrement de la modification.', 'details': response.data}), 500
+        # Insérer l'ancien propriétaire dans la table historique_modifications
+        histor_data = {
+            'hardware_id': id,
+            'date_modification': 'now()',
+            'ancien_proprietaire': current_owner,
+            'commentaire': commentaire,
+            'modifie_par': modifie_par
+        }
+        supabase.table('historique_modifications').insert(histor_data).execute()
+
+        return jsonify({'success': True}), 200
+
+    except Exception as e:
+        print(f"Error updating historique_modifications with ID {id}: {e}")  # Log the error for debugging
+        return jsonify({'error': 'Erreur lors de la mise à jour des données.'}), 500
 
 
 # Point d'entrée de l'application Flask
