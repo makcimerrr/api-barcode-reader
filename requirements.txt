@@ -2,4 +2,5 @@ flask
 flask-cors
 supabase
 python-dotenv
-pandas
+requests
+APScheduler
