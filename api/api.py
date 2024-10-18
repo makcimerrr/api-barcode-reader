@@ -1,40 +1,18 @@
-import requests
 from flask import Flask, jsonify, request
 from flask_cors import CORS
-from apscheduler.schedulers.background import BackgroundScheduler
-import subprocess
 from supabase import create_client, Client
 import os
 from dotenv import load_dotenv
 
 app = Flask(__name__)
-CORS(app)  # Active CORS pour toutes les routes
+CORS(app)
 
-# Charger les variables d'environnement
-load_dotenv('.env.development.local')  # Assurez-vous que ce fichier contient SUPABASE_URL et SUPABASE_ANON_KEY
+load_dotenv('.env.development.local')
 
 # Créer le client Supabase
 url = os.getenv("SUPABASE_URL")
 key = os.getenv("SUPABASE_ANON_KEY")
 supabase: Client = create_client(url, key)
-
-
-# Fonction pour exécuter le script update.py
-def run_update_script():
-    # Exécutez votre script update.py
-    process = subprocess.Popen(['python3', 'update_users.py'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
-    stdout, stderr = process.communicate()
-
-    if stdout:
-        print(stdout.decode())
-    if stderr:
-        print(stderr.decode())
-
-
-# Configurer le scheduler
-scheduler = BackgroundScheduler()
-scheduler.add_job(run_update_script, 'interval', hours=1)  # Exécutez le script toutes les heures
-scheduler.start()
 
 
 @app.route('/api/hardware/<sn>', methods=['GET'])
@@ -123,65 +101,28 @@ def update_historique_modifications(id):
         return jsonify({'error': 'Erreur lors de la mise à jour des données.'}), 500
 
 
-@app.route('/api/sync_notion_users', methods=['POST'])
-def sync_notion_users():
-    try:
-        # Récupérer les données depuis Notion
-        notion_url = f"https://api.notion.com/v1/databases/{NOTION_DATABASE_ID}/query"
-        headers = {
-            "Authorization": f"Bearer {os.getenv('NOTION_API_TOKEN')}",
-            "Notion-Version": "2022-06-28",
-        }
-        response = requests.post(notion_url, headers=headers)
-        notion_data = response.json()
-
-        users = []
-        for result in notion_data.get('results', []):
-            first_name = result['properties']['Prénom']['rich_text'][0]['text']['content']
-            last_name = result['properties']['Nom']['rich_text'][0]['text']['content']
-            users.append({'first_name': first_name, 'last_name': last_name})
-
-        # Vérifier et insérer les nouveaux utilisateurs dans Supabase
-        for user in users:
-            supabase_response = supabase.table('users').select('*').eq('first_name', user['first_name']).eq('last_name',
-                                                                                                            user[
-                                                                                                                'last_name']).execute()
-            if not supabase_response.data:  # Si l'utilisateur n'existe pas
-                supabase.table('users').insert(user).execute()
-
-        return jsonify({'success': True, 'message': 'Utilisateurs synchronisés avec succès.'}), 200
-
-    except Exception as e:
-        print(f"Error syncing users from Notion: {e}")  # Log the error for debugging
-        return jsonify({'error': 'Erreur lors de la synchronisation des utilisateurs.'}), 500
-
-
-# Route pour rechercher des suggestions d'utilisateurs
 @app.route('/api/users/suggestions', methods=['GET'])
-def get_user_suggestions():
-    # Récupérer le terme de recherche depuis les paramètres de la requête
-    query = request.args.get('query', '')
-
-    if not query:
-        return jsonify({"error": "A search query is required"}), 400
-
+def user_suggestions():
     try:
-        # Rechercher dans Supabase les utilisateurs correspondant au query dans 'first_name', 'last_name' ou 'login_title'
-        response = supabase.table('users') \
-            .select('first_name, last_name, login_title, login_link') \
-            .ilike('first_name', f'%{query}%') \
-            .or_(f"last_name.ilike('%{query}%')") \
-            .or_(f"login_title.ilike('%{query}%')") \
-            .execute()
+        query = request.args.get('query', '').lower()
+        if not query:
+            return jsonify({'error': 'Veuillez fournir une requête de recherche.'}), 400
 
-        if response.error:
-            raise Exception(response.error)
+        # Debug log
+        print(f"Recherche d'utilisateurs avec la requête: {query}")
 
-        # Retourner les suggestions en JSON, incluant le login_link
-        return jsonify(response.data), 200
+        response = supabase.table('users').select('*').ilike('login_title', f'%{query}%').execute()
 
+        # Debug log
+        print(f"Réponse de la base de données: {response.data}")
+
+        if response.data:
+            return jsonify(response.data)
+        else:
+            return jsonify({'error': 'Aucun résultat trouvé pour la requête donnée.'}), 404
     except Exception as e:
-        return jsonify({"error": str(e)}), 500
+        print(f"Erreur lors de la recherche d'utilisateurs: {e}")  # Log l'erreur pour le débogage
+        return jsonify({'error': 'Erreur lors de la recherche des données.'}), 500
 
 
 # Point d'entrée de l'application Flask
