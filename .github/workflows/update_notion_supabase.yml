@@ -4,6 +4,7 @@ on:
     schedule:
     # Planifie l'exécution du script tous les jours à 8h et 19h
         - cron: '0 8,19 * * *'
+    workflow_dispatch:
 
 jobs:
     update:
