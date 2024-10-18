@@ -81,16 +81,24 @@ def get_users_from_notion():
 def upsert_users_to_supabase(users):
     for user in users:
         # Vérifier si l'utilisateur avec le même login_title existe
-        response = supabase.table('users').select('*').eq('login_title', user['login_title']).execute()
+        response = supabase.table('users').select('first_name, last_name, login_link').eq('login_title',
+                                                                                          user['login_title']).execute()
 
         if response.data:
-            # Si l'utilisateur existe, mettre à jour ses informations
-            print(f"Mise à jour de l'utilisateur {user['login_title']}")
-            supabase.table('users').update({
-                'first_name': user['first_name'],
-                'last_name': user['last_name'],
-                'login_link': user['login_link']
-            }).eq('login_title', user['login_title']).execute()
+            existing_user = response.data[0]
+            # Comparer les données existantes avec les nouvelles données
+            if (existing_user['first_name'] != user['first_name'] or
+                existing_user['last_name'] != user['last_name'] or
+                existing_user['login_link'] != user['login_link']):
+                # Si les données sont différentes, mettre à jour les informations
+                print(f"Mise à jour de l'utilisateur {user['login_title']}")
+                supabase.table('users').update({
+                    'first_name': user['first_name'],
+                    'last_name': user['last_name'],
+                    'login_link': user['login_link']
+                }).eq('login_title', user['login_title']).execute()
+            else:
+                print(f"Pas de changement pour l'utilisateur {user['login_title']}, pas de mise à jour effectuée")
         else:
             # Si l'utilisateur n'existe pas, l'insérer
             print(f"Insertion du nouvel utilisateur {user['login_title']}")
