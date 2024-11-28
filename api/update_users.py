@@ -47,6 +47,7 @@ def get_users_from_notion():
             last_name = ''
             login_title = ''
             login_link = ''
+            promo_statut = ''
 
             # Vérifier si le champ "Prénom" existe et contient un texte
             if 'Prénom' in properties and properties['Prénom']['rich_text']:
@@ -62,13 +63,17 @@ def get_users_from_notion():
                 page_id = result['id']
                 login_link = f"https://www.notion.so/{page_id.replace('-', '')}"
 
+            if 'Promo' in properties and properties['Promo']['select']:
+                promo_statut = properties['Promo']['select']['name']
+
             # Ajouter l'utilisateur s'il y a des informations valides
-            if first_name or last_name or login_title:
+            if first_name or last_name or login_title or promo_statut:
                 users.append({
                     'first_name': first_name,
                     'last_name': last_name,
                     'login_title': login_title,  # Le titre de la page Login
-                    'login_link': login_link  # Le lien vers la page Login
+                    'login_link': login_link,  # Le lien vers la page Login
+                    'promo_statut': promo_statut,
                 })
 
         has_more = data.get("has_more", False)
@@ -81,21 +86,24 @@ def get_users_from_notion():
 def upsert_users_to_supabase(users):
     for user in users:
         # Vérifier si l'utilisateur avec le même login_title existe
-        response = supabase.table('users').select('first_name, last_name, login_link').eq('login_title',
-                                                                                          user['login_title']).execute()
+        response = supabase.table('users').select('first_name, last_name, login_link', 'promo_statut').eq('login_title',
+                                                                                                          user[
+                                                                                                              'login_title']).execute()
 
         if response.data:
             existing_user = response.data[0]
             # Comparer les données existantes avec les nouvelles données
             if (existing_user['first_name'] != user['first_name'] or
-                existing_user['last_name'] != user['last_name'] or
-                existing_user['login_link'] != user['login_link']):
+                    existing_user['last_name'] != user['last_name'] or
+                    existing_user['login_link'] != user['login_link'] or
+                    existing_user['promo_statut'] != user['promo_statut']):
                 # Si les données sont différentes, mettre à jour les informations
                 print(f"Mise à jour de l'utilisateur {user['login_title']}")
                 supabase.table('users').update({
                     'first_name': user['first_name'],
                     'last_name': user['last_name'],
-                    'login_link': user['login_link']
+                    'login_link': user['login_link'],
+                    'promo_statut': user['promo_statut']
                 }).eq('login_title', user['login_title']).execute()
             else:
                 print(f"Pas de changement pour l'utilisateur {user['login_title']}, pas de mise à jour effectuée")
@@ -106,7 +114,8 @@ def upsert_users_to_supabase(users):
                 'first_name': user['first_name'],
                 'last_name': user['last_name'],
                 'login_title': user['login_title'],
-                'login_link': user['login_link']
+                'login_link': user['login_link'],
+                'promo_statut': user['promo_statut']
             }).execute()
 
 
